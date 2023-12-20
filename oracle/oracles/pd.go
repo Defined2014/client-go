@@ -214,23 +214,25 @@ func (o *pdOracle) getLastTSWithArrivalTS(txnScope string) (*lastTSO, bool) {
 	return last, true
 }
 
-func (o *pdOracle) updateTS(ctx context.Context, interval time.Duration) {
+func (o *pdOracle) updateTS(_ context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			c, f := context.WithTimeout(context.Background(), interval)
 			// Update the timestamp for each txnScope
 			o.lastTSMap.Range(func(key, _ interface{}) bool {
 				txnScope := key.(string)
-				ts, err := o.getTimestamp(ctx, txnScope)
+				ts, err := o.getTimestamp(c, txnScope)
 				if err != nil {
-					logutil.Logger(ctx).Error("updateTS error", zap.String("txnScope", txnScope), zap.Error(err))
+					logutil.Logger(c).Error("updateTS error", zap.String("txnScope", txnScope), zap.Error(err))
 					return true
 				}
 				o.setLastTS(ts, txnScope)
 				return true
 			})
+			f()
 		case <-o.quit:
 			return
 		}
